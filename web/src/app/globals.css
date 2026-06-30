@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@theme {
+  /* Paleta MyHandStats — SaaS deportivo premium */
+  --color-bg: #0a1626;
+  --color-surface: #0f2238;
+  --color-surface-2: #14304b;
+  --color-border: #1d3a59;
+
+  --color-petrol: #0e4c5b;
+  --color-petrol-bright: #15788f;
+  --color-cyan: #22d3ee;
+  --color-lime: #84cc16;
+  --color-orange: #f97316;
+  --color-coral: #fb6b6b;
+
+  --color-ink: #e8f0f8;
+  --color-muted: #8aa0b4;
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(34, 211, 238, 0.12), transparent 60%),
+    radial-gradient(900px 500px at 0% 0%, rgba(14, 76, 91, 0.35), transparent 55%),
+    var(--color-bg);
+  color: var(--color-ink);
+}
