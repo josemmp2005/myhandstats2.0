@@ -6,9 +6,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
 from app.core.security import hash_password
 from app.models.usuario import Usuario
-from app.schemas.usuario import UsuarioCreate, UsuarioResponse, UsuarioUpdate
+from app.schemas.usuario import (
+    UsuarioCreate,
+    UsuarioResponse,
+    UsuarioSelfUpdate,
+    UsuarioUpdate,
+)
 
 router = APIRouter(prefix="/usuarios", tags=["usuarios"])
 
@@ -42,6 +48,29 @@ async def listar_usuarios(
         query = query.where(Usuario.activo == activo)
     result = await db.execute(query.order_by(Usuario.apellidos, Usuario.nombre))
     return result.scalars().all()
+
+
+@router.get("/me", response_model=UsuarioResponse)
+async def obtener_mi_perfil(usuario: Usuario = Depends(get_current_user)):
+    return usuario
+
+
+@router.patch("/me", response_model=UsuarioResponse)
+async def actualizar_mi_perfil(
+    payload: UsuarioSelfUpdate,
+    db: AsyncSession = Depends(get_db),
+    usuario: Usuario = Depends(get_current_user),
+):
+    data = payload.model_dump(exclude_unset=True)
+    if "password" in data:
+        data["password_hash"] = hash_password(data.pop("password"))
+
+    for key, value in data.items():
+        setattr(usuario, key, value)
+
+    await db.commit()
+    await db.refresh(usuario)
+    return usuario
 
 
 @router.get("/{usuario_id}", response_model=UsuarioResponse)

@@ -47,14 +47,19 @@ api/
     │   └── deps.py          # get_current_user (dependencia FastAPI)
     ├── models/
     │   ├── base.py          # DeclarativeBase de SQLAlchemy
-    │   └── usuario.py       # ORM model → tabla usuarios
+    │   ├── enums.py         # RolClub (espejo del ENUM rol_club)
+    │   ├── usuario.py       # ORM model → tabla usuarios
+    │   ├── club.py          # ORM model → tabla clubes
+    │   └── club_usuario.py  # ORM model → tabla club_usuarios (N:M)
     ├── schemas/
     │   ├── auth.py          # LoginRequest, TokenResponse
-    │   └── usuario.py       # UsuarioCreate, UsuarioUpdate, UsuarioResponse
+    │   ├── usuario.py       # UsuarioCreate, UsuarioUpdate, UsuarioSelfUpdate, UsuarioResponse
+    │   └── club.py          # ClubCreate, ClubUpdate, ClubResponse, ClubMembershipResponse
     └── routers/
         ├── health.py        # GET /health, GET /health/db
         ├── auth.py          # POST /auth/login|refresh|logout
-        └── usuarios.py      # CRUD /usuarios
+        ├── usuarios.py      # CRUD /usuarios + /usuarios/me
+        └── clubes.py        # CRUD /clubes
 ```
 
 ---
@@ -141,9 +146,13 @@ La contraseña nunca se devuelve en la respuesta.
 |--------|------|-------------|
 | POST | `/usuarios` | Crear usuario |
 | GET | `/usuarios` | Listar usuarios (filtro opcional: `?activo=true/false`) |
+| GET | `/usuarios/me` | 🔒 Perfil del usuario autenticado |
+| PATCH | `/usuarios/me` | 🔒 Editar el propio perfil (no permite tocar `activo`) |
 | GET | `/usuarios/{id}` | Obtener usuario por ID |
 | PATCH | `/usuarios/{id}` | Actualizar usuario (parcial) |
 | DELETE | `/usuarios/{id}` | Desactivar usuario (soft delete: `activo = false`) |
+
+> 🔒 = requiere `Authorization: Bearer <access_token>`.
 
 **Body `POST /usuarios`**
 ```json
@@ -176,3 +185,62 @@ La contraseña nunca se devuelve en la respuesta.
 | 409 | Email ya registrado |
 | 404 | Usuario no encontrado |
 | 422 | Validación fallida (password < 8 chars, email inválido…) |
+
+---
+
+### Clubes
+
+Gestión de la tabla `clubes` y su relación con los usuarios (`club_usuarios`). **Todos los endpoints requieren autenticación.**
+
+Al crear un club, el usuario autenticado se inserta automáticamente en `club_usuarios` con rol `GESTOR_CLUB` (en una única transacción atómica). Solo un gestor puede editar o desactivar el club.
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/clubes` |  Crear club (el creador queda como `GESTOR_CLUB`) |
+| GET | `/clubes` |  Listar los clubes del usuario autenticado (incluye su `rol`) |
+| GET | `/clubes/{id}` |  Obtener un club (solo si es miembro) |
+| PATCH | `/clubes/{id}` |  Editar club (solo `GESTOR_CLUB`) |
+| DELETE | `/clubes/{id}` |  Desactivar club, soft delete (solo `GESTOR_CLUB`) |
+
+**Body `POST /clubes`**
+```json
+{
+  "nombre": "Balonmano Ejemplo",
+  "slug": "balonmano-ejemplo",
+  "ciudad": "Madrid",
+  "pais": "España",
+  "logo_url": null,
+  "color_primario": "#0055A4",
+  "color_secundario": "#FFFFFF"
+}
+```
+> `slug` debe ser url-friendly: minúsculas, números y guiones (`^[a-z0-9]+(?:-[a-z0-9]+)*$`).
+
+**Respuesta `GET /clubes`** (lista, cada item incluye el rol del usuario):
+```json
+[
+  {
+    "id": "uuid",
+    "nombre": "Balonmano Ejemplo",
+    "slug": "balonmano-ejemplo",
+    "ciudad": "Madrid",
+    "pais": "España",
+    "logo_url": null,
+    "color_primario": "#0055A4",
+    "color_secundario": "#FFFFFF",
+    "activo": true,
+    "creado_en": "2026-06-30T10:45:39Z",
+    "actualizado_en": "2026-06-30T10:45:39Z",
+    "rol": "GESTOR_CLUB"
+  }
+]
+```
+
+**Códigos de error**
+| Código | Causa |
+|--------|-------|
+| 401 | Falta token o es inválido |
+| 403 | El usuario no es `GESTOR_CLUB` del club |
+| 404 | Club no encontrado o el usuario no es miembro |
+| 409 | El slug ya está en uso |
+| 422 | Validación fallida (slug con formato inválido…) |
