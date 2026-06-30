@@ -44,23 +44,30 @@ api/
     │   ├── config.py        # Settings (pydantic-settings, lee .env)
     │   ├── database.py      # Engine async, sesión, check_db_connection()
     │   ├── security.py      # hash/verify password, create/decode JWT
-    │   └── deps.py          # get_current_user (dependencia FastAPI)
+    │   ├── deps.py          # get_current_user (dependencia FastAPI)
+    │   └── club_access.py   # require_member / require_gestor (autorización por club)
     ├── models/
     │   ├── base.py          # DeclarativeBase de SQLAlchemy
-    │   ├── enums.py         # RolClub (espejo del ENUM rol_club)
-    │   ├── usuario.py       # ORM model → tabla usuarios
-    │   ├── club.py          # ORM model → tabla clubes
-    │   └── club_usuario.py  # ORM model → tabla club_usuarios (N:M)
-    ├── schemas/
-    │   ├── auth.py          # LoginRequest, TokenResponse
-    │   ├── usuario.py       # UsuarioCreate, UsuarioUpdate, UsuarioSelfUpdate, UsuarioResponse
-    │   └── club.py          # ClubCreate, ClubUpdate, ClubResponse, ClubMembershipResponse
+    │   ├── enums.py         # RolClub, CategoriaEquipo, GeneroEquipo, PosicionJugador…
+    │   ├── usuario.py       # ORM → usuarios
+    │   ├── club.py          # ORM → clubes
+    │   ├── club_usuario.py  # ORM → club_usuarios (N:M usuario↔club)
+    │   ├── temporada.py     # ORM → temporadas
+    │   ├── equipo.py        # ORM → equipos
+    │   ├── jugador.py       # ORM → jugadores
+    │   └── jugador_equipo.py# ORM → jugadores_equipos (N:M jugador↔equipo)
+    ├── schemas/             # Pydantic por recurso (auth, usuario, club, temporada, equipo, jugador…)
     └── routers/
         ├── health.py        # GET /health, GET /health/db
         ├── auth.py          # POST /auth/login|refresh|logout
         ├── usuarios.py      # CRUD /usuarios + /usuarios/me
-        └── clubes.py        # CRUD /clubes
+        ├── clubes.py        # CRUD /clubes
+        ├── temporadas.py    # CRUD /clubes/{id}/temporadas
+        ├── equipos.py       # CRUD /clubes/{id}/equipos + plantilla
+        └── jugadores.py     # CRUD /clubes/{id}/jugadores
 ```
+
+> Temporadas, equipos y jugadores cuelgan del club (`/clubes/{club_id}/...`) y exigen ser **miembro activo** del club (dependencia `require_member`).
 
 ---
 
@@ -152,7 +159,7 @@ La contraseña nunca se devuelve en la respuesta.
 | PATCH | `/usuarios/{id}` | Actualizar usuario (parcial) |
 | DELETE | `/usuarios/{id}` | Desactivar usuario (soft delete: `activo = false`) |
 
-> 🔒 = requiere `Authorization: Bearer <access_token>`.
+🔒 = requiere `Authorization: Bearer <access_token>`.
 
 **Body `POST /usuarios`**
 ```json
@@ -244,3 +251,89 @@ Al crear un club, el usuario autenticado se inserta automáticamente en `club_us
 | 404 | Club no encontrado o el usuario no es miembro |
 | 409 | El slug ya está en uso |
 | 422 | Validación fallida (slug con formato inválido…) |
+
+---
+
+### Temporadas
+
+Sub-recurso del club. `🔒` miembro del club. Una temporada agrupa equipos, jugadores y partidos.
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/clubes/{club_id}/temporadas` | Crear temporada |
+| GET | `/clubes/{club_id}/temporadas` | Listar temporadas del club |
+| GET | `/clubes/{club_id}/temporadas/{id}` | Obtener temporada |
+| PATCH | `/clubes/{club_id}/temporadas/{id}` | Editar (incluye flag `activa`) |
+
+**Body `POST`**: `{ "nombre": "2026/27", "fecha_inicio": "2026-09-01", "fecha_fin": "2027-06-30", "activa": true }`
+Constraints: `nombre` único por club (409); `fecha_inicio <= fecha_fin` (422).
+
+---
+
+### Equipos
+
+Sub-recurso del club. **Un equipo pertenece a un club Y a una temporada** (ambos obligatorios). `tipo`: `PROPIO` | `RIVAL`.
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/clubes/{club_id}/equipos` | Crear equipo (valida que la temporada sea del club) |
+| GET | `/clubes/{club_id}/equipos` | Listar (filtros: `?temporada_id=`, `?tipo=`) |
+| GET | `/clubes/{club_id}/equipos/{id}` | Obtener equipo |
+| PATCH | `/clubes/{club_id}/equipos/{id}` | Editar equipo |
+| DELETE | `/clubes/{club_id}/equipos/{id}` | Desactivar (soft delete) |
+
+**Body `POST`**:
+```json
+{
+  "temporada_id": "uuid",
+  "nombre": "Senior Masculino",
+  "nombre_corto": "SEN-M",
+  "categoria": "SENIOR",
+  "genero": "MASCULINO",
+  "tipo": "PROPIO"
+}
+```
+`categoria`: SENIOR·JUVENIL·CADETE·INFANTIL·ALEVIN·BENJAMIN·OTRO · `genero`: MASCULINO·FEMENINO·MIXTO.
+Único `(club, temporada, nombre)` → 409.
+
+#### Plantilla (jugadores ↔ equipo)
+
+Asigna jugadores **ya existentes en el club** a un equipo. La temporada se hereda automáticamente del equipo.
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/clubes/{club_id}/equipos/{equipo_id}/jugadores` | Asignar jugador al equipo |
+| GET | `/clubes/{club_id}/equipos/{equipo_id}/jugadores` | Listar plantilla (asignación + datos del jugador) |
+| PATCH | `/clubes/{club_id}/equipos/{equipo_id}/jugadores/{jugador_id}` | Editar dorsal / tipo / disponibilidad |
+| DELETE | `/clubes/{club_id}/equipos/{equipo_id}/jugadores/{jugador_id}` | Quitar de la plantilla (soft delete) |
+
+**Body `POST`**: `{ "jugador_id": "uuid", "dorsal": 7, "tipo_asignacion": "PRINCIPAL" }`
+`dorsal` 0–99 · `tipo_asignacion`: PRINCIPAL·REFUERZO·DISPONIBLE. El jugador debe ser del club (422); no se puede duplicar `(jugador, equipo, temporada)` (409).
+
+---
+
+### Jugadores
+
+Sub-recurso del club. **El jugador pertenece al club, no al equipo** (se asigna a equipos vía la plantilla). `tipo`: `PROPIO` | `RIVAL` (rivales para scouting).
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/clubes/{club_id}/jugadores` | Crear jugador |
+| GET | `/clubes/{club_id}/jugadores` | Listar (filtros: `?tipo=`, `?activo=`) |
+| GET | `/clubes/{club_id}/jugadores/{id}` | Obtener jugador |
+| PATCH | `/clubes/{club_id}/jugadores/{id}` | Editar jugador |
+| DELETE | `/clubes/{club_id}/jugadores/{id}` | Desactivar (soft delete) |
+
+**Body `POST`**:
+```json
+{
+  "nombre": "Ana",
+  "apellidos": "López",
+  "fecha_nacimiento": "2001-04-12",
+  "mano_dominante": "DERECHA",
+  "posicion_principal": "CENTRAL",
+  "altura_cm": 178,
+  "peso_kg": 72
+}
+```
+`posicion_*`: PORTERO·EXTREMO_IZQUIERDO·EXTREMO_DERECHO·LATERAL_IZQUIERDO·LATERAL_DERECHO·CENTRAL·PIVOTE·UNIVERSAL · `mano_dominante`: DERECHA·IZQUIERDA·AMBAS·DESCONOCIDA. `altura_cm`/`peso_kg` > 0.
