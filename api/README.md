@@ -17,6 +17,7 @@ Copia `.env.example` a `.env` y ajusta si es necesario:
 
 ```env
 DATABASE_URL=postgresql+asyncpg://myhandstats:myhandstats@localhost:5433/myhandstats
+SECRET_KEY=<genera_uno_con: python -c "import secrets; print(secrets.token_hex(32))">
 ```
 
 > El puerto es **5433** porque el 5432 está ocupado por una instancia PostgreSQL nativa del sistema.
@@ -42,14 +43,17 @@ api/
     ├── core/
     │   ├── config.py        # Settings (pydantic-settings, lee .env)
     │   ├── database.py      # Engine async, sesión, check_db_connection()
-    │   └── security.py      # hash_password(), verify_password() con bcrypt
+    │   ├── security.py      # hash/verify password, create/decode JWT
+    │   └── deps.py          # get_current_user (dependencia FastAPI)
     ├── models/
     │   ├── base.py          # DeclarativeBase de SQLAlchemy
     │   └── usuario.py       # ORM model → tabla usuarios
     ├── schemas/
-    │   └── usuario.py       # Pydantic: UsuarioCreate, UsuarioUpdate, UsuarioResponse
+    │   ├── auth.py          # LoginRequest, TokenResponse
+    │   └── usuario.py       # UsuarioCreate, UsuarioUpdate, UsuarioResponse
     └── routers/
         ├── health.py        # GET /health, GET /health/db
+        ├── auth.py          # POST /auth/login|refresh|logout
         └── usuarios.py      # CRUD /usuarios
 ```
 
@@ -77,6 +81,54 @@ En caso de fallo devuelve `503`:
 ```json
 { "status": "error", "database": "unreachable" }
 ```
+
+---
+
+### Auth
+
+Autenticación basada en **JWT**. El access token dura 30 min y se envía en el body. El refresh token dura 7 días y se almacena en una cookie `httpOnly` (inaccesible desde JS).
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/auth/login` | Obtener access + refresh token |
+| POST | `/auth/refresh` | Renovar access token (usa cookie automáticamente) |
+| POST | `/auth/logout` | Invalidar refresh token (borra la cookie) |
+
+**`POST /auth/login`**
+```json
+// Request
+{ "email": "entrenador@club.com", "password": "minimo8chars" }
+
+// Response 200
+{ "access_token": "<jwt>", "token_type": "bearer" }
+```
+Además se establece la cookie `refresh_token` (httpOnly).
+
+**`POST /auth/refresh`** — sin body; el navegador envía la cookie automáticamente.
+```json
+// Response 200
+{ "access_token": "<jwt_nuevo>", "token_type": "bearer" }
+```
+El refresh token rota: se emite uno nuevo en cada llamada.
+
+**`POST /auth/logout`** — sin body. Respuesta `204 No Content`. Borra la cookie.
+
+**Códigos de error**
+| Código | Causa |
+|--------|-------|
+| 401 | Credenciales incorrectas / token inválido o expirado |
+| 403 | Usuario desactivado |
+
+**Proteger un endpoint:**
+```python
+from app.core.deps import get_current_user
+from app.models.usuario import Usuario
+
+@router.get("/me")
+async def me(usuario: Usuario = Depends(get_current_user)):
+    return usuario
+```
+El cliente debe incluir `Authorization: Bearer <access_token>` en la cabecera.
 
 ---
 
