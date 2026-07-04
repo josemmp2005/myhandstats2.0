@@ -12,6 +12,7 @@ from app.models.enums import RolClub
 from app.models.usuario import Usuario
 from app.schemas.club import (
     ClubCreate,
+    ClubMemberResponse,
     ClubMembershipResponse,
     ClubResponse,
     ClubUpdate,
@@ -102,6 +103,35 @@ async def obtener_club(
     if not club:
         raise HTTPException(status_code=404, detail="Club no encontrado")
     return club
+
+
+@router.get("/{club_id}/usuarios", response_model=list[ClubMemberResponse])
+async def listar_miembros(
+    club_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    usuario: Usuario = Depends(get_current_user),
+):
+    # Cualquier miembro activo puede ver el listado de miembros del club.
+    if not await _get_membership(db, club_id, usuario.id):
+        raise HTTPException(status_code=404, detail="Club no encontrado")
+
+    result = await db.execute(
+        select(Usuario, ClubUsuario.rol, ClubUsuario.activo)
+        .join(ClubUsuario, ClubUsuario.usuario_id == Usuario.id)
+        .where(ClubUsuario.club_id == club_id)
+        .order_by(Usuario.apellidos, Usuario.nombre)
+    )
+    return [
+        ClubMemberResponse(
+            usuario_id=u.id,
+            email=u.email,
+            nombre=u.nombre,
+            apellidos=u.apellidos,
+            rol=rol,
+            activo=activo,
+        )
+        for u, rol, activo in result.all()
+    ]
 
 
 @router.patch("/{club_id}", response_model=ClubResponse)

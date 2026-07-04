@@ -349,6 +349,45 @@ FOR EACH ROW
 EXECUTE FUNCTION actualizar_actualizado_en();
 
 -- =========================================================
+-- INVITACIONES AL CLUB
+-- Códigos/tokens que permiten a un usuario unirse a un club con un rol.
+-- El token se puede compartir como código o (en el futuro) por email.
+-- =========================================================
+
+CREATE TABLE invitaciones_club (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  club_id UUID NOT NULL REFERENCES clubes(id) ON DELETE CASCADE,
+  codigo TEXT NOT NULL UNIQUE,
+
+  rol rol_club NOT NULL DEFAULT 'ENTRENADOR',
+  email CITEXT,
+
+  creada_por UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+  expira_en TIMESTAMPTZ,
+
+  max_usos INTEGER NOT NULL DEFAULT 1,
+  usos INTEGER NOT NULL DEFAULT 0,
+
+  activa BOOLEAN NOT NULL DEFAULT TRUE,
+
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  CONSTRAINT chk_invitaciones_max_usos CHECK (max_usos >= 1),
+  CONSTRAINT chk_invitaciones_usos CHECK (usos >= 0 AND usos <= max_usos)
+);
+
+CREATE INDEX idx_invitaciones_club_id ON invitaciones_club(club_id);
+CREATE INDEX idx_invitaciones_codigo ON invitaciones_club(codigo);
+CREATE INDEX idx_invitaciones_activa ON invitaciones_club(activa);
+
+CREATE TRIGGER trg_invitaciones_actualizado_en
+BEFORE UPDATE ON invitaciones_club
+FOR EACH ROW
+EXECUTE FUNCTION actualizar_actualizado_en();
+
+-- =========================================================
 -- TEMPORADAS
 -- Cada club puede tener varias temporadas.
 -- =========================================================

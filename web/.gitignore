@@ -46,3 +46,5 @@ next-env.d.ts
 AGENT.md
 CLAUDE.md
 CLAUDE_REQUEST.md
+.claude/
+.claude/agent.settings.json

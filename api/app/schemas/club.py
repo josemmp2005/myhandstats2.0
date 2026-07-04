@@ -50,3 +50,16 @@ class ClubMembershipResponse(ClubResponse):
     """Club junto con el rol del usuario autenticado en él."""
 
     rol: RolClub
+
+
+class ClubMemberResponse(BaseModel):
+    """Un miembro del club: datos del usuario + su rol global en el club."""
+
+    usuario_id: uuid.UUID
+    email: str
+    nombre: str
+    apellidos: Optional[str]
+    rol: RolClub
+    activo: bool
+
+    model_config = {"from_attributes": True}

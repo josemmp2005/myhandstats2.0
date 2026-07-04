@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.club_access import require_member
+from app.core.club_access import require_gestor, require_member
 from app.core.database import get_db
 from app.models.club_usuario import ClubUsuario
 from app.models.temporada import Temporada
@@ -18,7 +18,7 @@ async def crear_temporada(
     club_id: uuid.UUID,
     payload: TemporadaCreate,
     db: AsyncSession = Depends(get_db),
-    membership: ClubUsuario = Depends(require_member),
+    membership: ClubUsuario = Depends(require_gestor),
 ):
     existe = await db.execute(
         select(Temporada).where(
@@ -66,7 +66,7 @@ async def actualizar_temporada(
     temporada_id: uuid.UUID,
     payload: TemporadaUpdate,
     db: AsyncSession = Depends(get_db),
-    membership: ClubUsuario = Depends(require_member),
+    membership: ClubUsuario = Depends(require_gestor),
 ):
     temporada = await _get_temporada_del_club(db, club_id, temporada_id)
 

@@ -206,6 +206,7 @@ Al crear un club, el usuario autenticado se inserta automáticamente en `club_us
 | POST | `/clubes` |  Crear club (el creador queda como `GESTOR_CLUB`) |
 | GET | `/clubes` |  Listar los clubes del usuario autenticado (incluye su `rol`) |
 | GET | `/clubes/{id}` |  Obtener un club (solo si es miembro) |
+| GET | `/clubes/{id}/usuarios` |  Listar miembros del club (usuario + rol) |
 | PATCH | `/clubes/{id}` |  Editar club (solo `GESTOR_CLUB`) |
 | DELETE | `/clubes/{id}` |  Desactivar club, soft delete (solo `GESTOR_CLUB`) |
 
@@ -254,16 +255,47 @@ Al crear un club, el usuario autenticado se inserta automáticamente en `club_us
 
 ---
 
+### Invitaciones
+
+Permiten que un usuario se una a un club mediante un **código**. El gestor genera el código (con un rol asociado) y lo comparte; el usuario lo canjea. El mismo token sirve de base para enviar invitaciones por email en el futuro.
+
+| Método | Ruta | Acceso | Descripción |
+|--------|------|--------|-------------|
+| POST | `/clubes/{club_id}/invitaciones` | Gestor | Generar un código de invitación |
+| GET | `/clubes/{club_id}/invitaciones` | Gestor | Listar invitaciones del club |
+| DELETE | `/clubes/{club_id}/invitaciones/{id}` | Gestor | Revocar (desactivar) |
+| POST | `/invitaciones/redimir` | Autenticado | Canjear un código y unirse al club |
+
+**Body `POST /clubes/{id}/invitaciones`**: `{ "rol": "ENTRENADOR", "email": null, "max_usos": 1, "expira_en": null }`
+- `rol`: rol con el que entrará el usuario (ENTRENADOR·AYUDANTE·ANALISTA·GESTOR_CLUB).
+- `email` (opcional): restringe el canje a ese correo.
+- `max_usos`: nº de canjes (1 = personal de un solo uso; >1 = código reutilizable). Al agotarse, la invitación se desactiva.
+
+**Body `POST /invitaciones/redimir`**: `{ "codigo": "PEJC2DC7" }` → crea la membresía en `club_usuarios` con el rol de la invitación.
+
+**Códigos de error (redimir)**
+| Código | Causa |
+|--------|-------|
+| 404 | Código inexistente o ya inactivo |
+| 410 | Invitación caducada |
+| 409 | Sin usos disponibles, o ya eres miembro del club |
+| 403 | La invitación es para otro correo |
+
+---
+
+> **Autorización por acción:** las **lecturas** (GET) exigen ser miembro del club (`require_member`).
+> Las **mutaciones** (crear/editar/borrar temporadas y equipos, asignaciones) exigen ser **`GESTOR_CLUB`** (`require_gestor`) → `403` si no lo eres.
+
 ### Temporadas
 
-Sub-recurso del club. `🔒` miembro del club. Una temporada agrupa equipos, jugadores y partidos.
+Sub-recurso del club. Una temporada agrupa equipos, jugadores y partidos.
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| POST | `/clubes/{club_id}/temporadas` | Crear temporada |
-| GET | `/clubes/{club_id}/temporadas` | Listar temporadas del club |
-| GET | `/clubes/{club_id}/temporadas/{id}` | Obtener temporada |
-| PATCH | `/clubes/{club_id}/temporadas/{id}` | Editar (incluye flag `activa`) |
+| Método | Ruta | Acceso | Descripción |
+|--------|------|--------|-------------|
+| POST | `/clubes/{club_id}/temporadas` | Gestor | Crear temporada |
+| GET | `/clubes/{club_id}/temporadas` | Miembro | Listar temporadas del club |
+| GET | `/clubes/{club_id}/temporadas/{id}` | Miembro | Obtener temporada |
+| PATCH | `/clubes/{club_id}/temporadas/{id}` | Gestor | Editar (incluye flag `activa`) |
 
 **Body `POST`**: `{ "nombre": "2026/27", "fecha_inicio": "2026-09-01", "fecha_fin": "2027-06-30", "activa": true }`
 Constraints: `nombre` único por club (409); `fecha_inicio <= fecha_fin` (422).
@@ -274,13 +306,15 @@ Constraints: `nombre` único por club (409); `fecha_inicio <= fecha_fin` (422).
 
 Sub-recurso del club. **Un equipo pertenece a un club Y a una temporada** (ambos obligatorios). `tipo`: `PROPIO` | `RIVAL`.
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| POST | `/clubes/{club_id}/equipos` | Crear equipo (valida que la temporada sea del club) |
-| GET | `/clubes/{club_id}/equipos` | Listar (filtros: `?temporada_id=`, `?tipo=`) |
-| GET | `/clubes/{club_id}/equipos/{id}` | Obtener equipo |
-| PATCH | `/clubes/{club_id}/equipos/{id}` | Editar equipo |
-| DELETE | `/clubes/{club_id}/equipos/{id}` | Desactivar (soft delete) |
+| Método | Ruta | Acceso | Descripción |
+|--------|------|--------|-------------|
+| POST | `/clubes/{club_id}/equipos` | Gestor | Crear equipo (valida que la temporada sea del club) |
+| GET | `/clubes/{club_id}/equipos` | Miembro | Listar (filtros: `?temporada_id=`, `?tipo=`, `?solo_mios=true`) |
+| GET | `/clubes/{club_id}/equipos/{id}` | Miembro | Obtener equipo |
+| PATCH | `/clubes/{club_id}/equipos/{id}` | Gestor | Editar equipo |
+| DELETE | `/clubes/{club_id}/equipos/{id}` | Gestor | Desactivar (soft delete) |
+
+> `?solo_mios=true` filtra a los equipos donde el usuario autenticado tiene una asignación activa en `equipo_usuarios` (lo usa la vista del entrenador para "Mis equipos").
 
 **Body `POST`**:
 ```json
@@ -300,15 +334,28 @@ Sub-recurso del club. **Un equipo pertenece a un club Y a una temporada** (ambos
 
 Asigna jugadores **ya existentes en el club** a un equipo. La temporada se hereda automáticamente del equipo.
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| POST | `/clubes/{club_id}/equipos/{equipo_id}/jugadores` | Asignar jugador al equipo |
-| GET | `/clubes/{club_id}/equipos/{equipo_id}/jugadores` | Listar plantilla (asignación + datos del jugador) |
-| PATCH | `/clubes/{club_id}/equipos/{equipo_id}/jugadores/{jugador_id}` | Editar dorsal / tipo / disponibilidad |
-| DELETE | `/clubes/{club_id}/equipos/{equipo_id}/jugadores/{jugador_id}` | Quitar de la plantilla (soft delete) |
+| Método | Ruta | Acceso | Descripción |
+|--------|------|--------|-------------|
+| POST | `/clubes/{club_id}/equipos/{equipo_id}/jugadores` | Gestor | Asignar jugador al equipo |
+| GET | `/clubes/{club_id}/equipos/{equipo_id}/jugadores` | Miembro | Listar plantilla (asignación + datos del jugador) |
+| PATCH | `/clubes/{club_id}/equipos/{equipo_id}/jugadores/{jugador_id}` | Gestor | Editar dorsal / tipo / disponibilidad |
+| DELETE | `/clubes/{club_id}/equipos/{equipo_id}/jugadores/{jugador_id}` | Gestor | Quitar de la plantilla (soft delete) |
 
 **Body `POST`**: `{ "jugador_id": "uuid", "dorsal": 7, "tipo_asignacion": "PRINCIPAL" }`
 `dorsal` 0–99 · `tipo_asignacion`: PRINCIPAL·REFUERZO·DISPONIBLE. El jugador debe ser del club (422); no se puede duplicar `(jugador, equipo, temporada)` (409).
+
+#### Cuerpo técnico (usuarios ↔ equipo)
+
+Asigna **miembros del club** (entrenador/ayudante/analista) a un equipo. La temporada se hereda del equipo. Define qué equipos ve cada usuario en su vista de "Mis equipos".
+
+| Método | Ruta | Acceso | Descripción |
+|--------|------|--------|-------------|
+| POST | `/clubes/{club_id}/equipos/{equipo_id}/usuarios` | Gestor | Asignar un miembro al equipo con un rol |
+| GET | `/clubes/{club_id}/equipos/{equipo_id}/usuarios` | Miembro | Listar cuerpo técnico (asignación + datos del usuario) |
+| DELETE | `/clubes/{club_id}/equipos/{equipo_id}/usuarios/{usuario_id}` | Gestor | Quitar del equipo (soft delete) |
+
+**Body `POST`**: `{ "usuario_id": "uuid", "rol": "ENTRENADOR" }`
+`rol`: ENTRENADOR·AYUDANTE·ANALISTA. El usuario debe ser miembro activo del club (422); no se duplica `(equipo, usuario, temporada, rol)` (409).
 
 ---
 

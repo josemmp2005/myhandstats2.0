@@ -10,13 +10,20 @@ from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.usuario import Usuario
 
-_bearer = HTTPBearer()
+# auto_error=False para devolver 401 (no 403) cuando falta la cabecera Authorization.
+_bearer = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: AsyncSession = Depends(get_db),
 ) -> Usuario:
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No autenticado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     token = credentials.credentials
     try:
         payload = decode_token(token)
