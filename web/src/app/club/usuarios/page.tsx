@@ -13,6 +13,8 @@ import {
   type Invitacion,
 } from "@/lib/types";
 
+const ROLE_OPTIONS = INVITE_ROLES.map((r) => ({ value: r, label: ROL_LABEL[r] }));
+
 export default function UsuariosPage() {
   const { club, role, loading: clubLoading } = useClub();
   const isAdmin = role === "GESTOR_CLUB";
@@ -34,6 +36,36 @@ export default function UsuariosPage() {
     setMembers(m);
     setInvs(i);
   }, [clubId]);
+
+  async function cambiarRol(usuarioId: string, rol: RolClub) {
+    if (!clubId) return;
+    setError(null);
+    try {
+      await apiFetch(`/clubes/${clubId}/usuarios/${usuarioId}`, {
+        method: "PATCH",
+        token: getToken(),
+        body: { rol },
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo cambiar el rol");
+    }
+  }
+
+  async function eliminarMiembro(usuarioId: string) {
+    if (!clubId) return;
+    if (!window.confirm("¿Quitar a este usuario del club?")) return;
+    setError(null);
+    try {
+      await apiFetch(`/clubes/${clubId}/usuarios/${usuarioId}`, {
+        method: "DELETE",
+        token: getToken(),
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo eliminar");
+    }
+  }
 
   useEffect(() => {
     if (!clubId || !isAdmin) return;
@@ -89,6 +121,7 @@ export default function UsuariosPage() {
                       <th className="px-4 py-2 font-medium">Email</th>
                       <th className="px-4 py-2 font-medium">Rol</th>
                       <th className="px-4 py-2 font-medium">Estado</th>
+                      <th className="px-4 py-2 font-medium" />
                     </tr>
                   </thead>
                   <tbody>
@@ -99,12 +132,38 @@ export default function UsuariosPage() {
                         </td>
                         <td className="px-4 py-2.5 text-muted">{m.email}</td>
                         <td className="px-4 py-2.5">
-                          <span className="rounded-full bg-petrol-bright/15 px-2.5 py-0.5 text-xs text-cyan">
-                            {ROL_LABEL[m.rol]}
-                          </span>
+                          {m.activo ? (
+                            <select
+                              value={m.rol}
+                              onChange={(e) =>
+                                void cambiarRol(m.usuario_id, e.target.value as RolClub)
+                              }
+                              className="rounded-full border border-border bg-transparent px-2.5 py-0.5 text-xs text-cyan"
+                            >
+                              {ROLE_OPTIONS.map((o) => (
+                                <option key={o.value} value={o.value}>
+                                  {o.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="rounded-full bg-petrol-bright/15 px-2.5 py-0.5 text-xs text-cyan">
+                              {ROL_LABEL[m.rol]}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-2.5 text-muted">
                           {m.activo ? "Activo" : "Inactivo"}
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          {m.activo && (
+                            <button
+                              onClick={() => void eliminarMiembro(m.usuario_id)}
+                              className="text-coral transition hover:underline"
+                            >
+                              Quitar
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}

@@ -13,6 +13,7 @@ from app.models.usuario import Usuario
 from app.schemas.club import (
     ClubCreate,
     ClubMemberResponse,
+    ClubMemberRoleUpdate,
     ClubMembershipResponse,
     ClubResponse,
     ClubUpdate,
@@ -132,6 +133,77 @@ async def listar_miembros(
         )
         for u, rol, activo in result.all()
     ]
+
+
+async def _ensure_not_last_gestor(
+    db: AsyncSession, club_id: uuid.UUID, usuario_id: uuid.UUID
+) -> None:
+    """Impide dejar al club sin ningún GESTOR_CLUB activo."""
+    result = await db.execute(
+        select(ClubUsuario.usuario_id).where(
+            ClubUsuario.club_id == club_id,
+            ClubUsuario.rol == RolClub.GESTOR_CLUB,
+            ClubUsuario.activo.is_(True),
+        )
+    )
+    otros_gestores = [uid for uid in result.scalars().all() if uid != usuario_id]
+    if not otros_gestores:
+        raise HTTPException(
+            status_code=409,
+            detail="El club debe tener al menos un gestor activo",
+        )
+
+
+@router.patch("/{club_id}/usuarios/{usuario_id}", response_model=ClubMemberResponse)
+async def actualizar_rol_miembro(
+    club_id: uuid.UUID,
+    usuario_id: uuid.UUID,
+    payload: ClubMemberRoleUpdate,
+    db: AsyncSession = Depends(get_db),
+    usuario: Usuario = Depends(get_current_user),
+):
+    await _require_gestor(db, club_id, usuario.id)
+
+    membership = await _get_membership(db, club_id, usuario_id)
+    if not membership:
+        raise HTTPException(status_code=404, detail="El usuario no es miembro de este club")
+
+    if membership.rol == RolClub.GESTOR_CLUB and payload.rol != RolClub.GESTOR_CLUB:
+        await _ensure_not_last_gestor(db, club_id, usuario_id)
+
+    membership.rol = payload.rol
+    await db.commit()
+
+    result = await db.execute(select(Usuario).where(Usuario.id == usuario_id))
+    miembro = result.scalar_one()
+    return ClubMemberResponse(
+        usuario_id=miembro.id,
+        email=miembro.email,
+        nombre=miembro.nombre,
+        apellidos=miembro.apellidos,
+        rol=membership.rol,
+        activo=membership.activo,
+    )
+
+
+@router.delete("/{club_id}/usuarios/{usuario_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_miembro(
+    club_id: uuid.UUID,
+    usuario_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    usuario: Usuario = Depends(get_current_user),
+):
+    await _require_gestor(db, club_id, usuario.id)
+
+    membership = await _get_membership(db, club_id, usuario_id)
+    if not membership:
+        raise HTTPException(status_code=404, detail="El usuario no es miembro de este club")
+
+    if membership.rol == RolClub.GESTOR_CLUB:
+        await _ensure_not_last_gestor(db, club_id, usuario_id)
+
+    membership.activo = False
+    await db.commit()
 
 
 @router.patch("/{club_id}", response_model=ClubResponse)

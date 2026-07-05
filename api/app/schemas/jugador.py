@@ -18,6 +18,9 @@ class JugadorCreate(BaseModel):
     altura_cm: Optional[int] = Field(None, gt=0)
     peso_kg: Optional[int] = Field(None, gt=0)
     foto_url: Optional[str] = None
+    # Todo jugador se crea ya asociado a un equipo (jugadores_equipos).
+    equipo_id: uuid.UUID
+    dorsal: Optional[int] = Field(None, ge=0, le=99)
 
 
 class JugadorUpdate(BaseModel):

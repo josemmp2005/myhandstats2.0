@@ -57,3 +57,20 @@ async def require_gestor(
             detail="Solo el gestor del club puede realizar esta acción",
         )
     return membership
+
+
+async def require_gestor_or_entrenador(
+    club_id: uuid.UUID = Path(...),
+    db: AsyncSession = Depends(get_db),
+    usuario: Usuario = Depends(get_current_user),
+) -> ClubUsuario:
+    """Dependencia: exige ser miembro y GESTOR_CLUB o ENTRENADOR del club."""
+    membership = await get_membership(db, club_id, usuario.id)
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Club no encontrado")
+    if membership.rol not in (RolClub.GESTOR_CLUB, RolClub.ENTRENADOR):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo el gestor o un entrenador puede realizar esta acción",
+        )
+    return membership

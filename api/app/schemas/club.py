@@ -52,6 +52,10 @@ class ClubMembershipResponse(ClubResponse):
     rol: RolClub
 
 
+class ClubMemberRoleUpdate(BaseModel):
+    rol: RolClub
+
+
 class ClubMemberResponse(BaseModel):
     """Un miembro del club: datos del usuario + su rol global en el club."""
 

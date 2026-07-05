@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -19,6 +20,8 @@ type ClubCtx = {
   role: RolClub | null;
   loading: boolean;
   setClubId: (id: string) => void;
+  /** Vuelve a pedir la lista de clubes (usar tras editar los datos del club activo). */
+  refresh: () => Promise<void>;
 };
 
 const ClubContext = createContext<ClubCtx | null>(null);
@@ -38,31 +41,34 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [clubId, setClubIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     const token = getToken();
     if (!token) {
       router.replace("/login");
       return;
     }
-    apiFetch<ClubMembership[]>("/clubes", { token })
-      .then((data) => {
-        setClubs(data);
+    try {
+      const data = await apiFetch<ClubMembership[]>("/clubes", { token });
+      setClubs(data);
+      setClubIdState((prev) => {
+        if (prev && data.some((c) => c.id === prev)) return prev;
         const stored =
           typeof window !== "undefined"
             ? localStorage.getItem(ACTIVE_CLUB_KEY)
             : null;
-        const initial =
-          data.find((c) => c.id === stored)?.id ?? data[0]?.id ?? null;
-        setClubIdState(initial);
-      })
-      .catch((err) => {
-        if (err instanceof ApiError && err.status === 401) {
-          clearToken();
-          router.replace("/login");
-        }
-      })
-      .finally(() => setLoading(false));
+        return data.find((c) => c.id === stored)?.id ?? data[0]?.id ?? null;
+      });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        clearToken();
+        router.replace("/login");
+      }
+    }
   }, [router]);
+
+  useEffect(() => {
+    void load().finally(() => setLoading(false));
+  }, [load]);
 
   function setClubId(id: string) {
     setClubIdState(id);
@@ -73,7 +79,9 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const role = club?.rol ?? null;
 
   return (
-    <ClubContext.Provider value={{ clubs, club, role, loading, setClubId }}>
+    <ClubContext.Provider
+      value={{ clubs, club, role, loading, setClubId, refresh: load }}
+    >
       {children}
     </ClubContext.Provider>
   );
