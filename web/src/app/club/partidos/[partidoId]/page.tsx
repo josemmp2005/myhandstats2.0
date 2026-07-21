@@ -53,7 +53,8 @@ const PERIODO_OFFSET_MS: Record<PeriodoPartido, number> = {
 export default function PartidoDetallePage() {
   const params = useParams<{ partidoId: string }>();
   const partidoId = params.partidoId;
-  const { club, loading: clubLoading } = useClub();
+  const { club, role, loading: clubLoading } = useClub();
+  const canManage = role === "GESTOR_CLUB" || role === "ENTRENADOR";
   const clubId = club?.id;
 
   const [partido, setPartido] = useState<Partido | null>(null);
@@ -146,9 +147,19 @@ export default function PartidoDetallePage() {
               {partido.pabellon ? ` · ${partido.pabellon}` : ""}
             </p>
           </div>
-          <span className="rounded-full border border-cyan/40 px-3 py-1 text-xs text-cyan">
-            {ESTADO_PARTIDO_LABEL[partido.estado]}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="rounded-full border border-cyan/40 px-3 py-1 text-xs text-cyan">
+              {ESTADO_PARTIDO_LABEL[partido.estado]}
+            </span>
+            {canManage && (
+              <Link
+                href={`/club/partidos/${partido.id}/convocatoria`}
+                className="rounded-xl border border-border px-4 py-2 text-sm text-ink transition hover:bg-surface-2"
+              >
+                Convocatoria
+              </Link>
+            )}
+          </div>
         </div>
       </header>
 

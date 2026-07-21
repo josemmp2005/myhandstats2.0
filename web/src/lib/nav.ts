@@ -24,8 +24,8 @@ export const coachNav: NavItem[] = [
   { label: "Mis equipos", href: "/club/equipos", ready: true },
   { label: "Jugadores", href: "/club/jugadores", ready: true },
   { label: "Partidos", href: "/club/partidos", ready: true },
-  { label: "Convocatorias", href: "/club/convocatorias", ready: false },
-  { label: "Live Stats", href: "/live", ready: false },
+  { label: "Convocatorias", href: "/club/partidos", ready: true },
+  { label: "Live Stats", href: "/live", ready: true },
   { label: "Estadísticas", href: "/club/estadisticas", ready: false },
 ];
 

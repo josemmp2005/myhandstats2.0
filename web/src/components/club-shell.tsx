@@ -85,7 +85,7 @@ export function ClubShell({ children }: { children: ReactNode }) {
             if (!item.ready) {
               return (
                 <span
-                  key={item.href}
+                  key={item.label}
                   className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-muted/50"
                 >
                   {item.label}
@@ -97,7 +97,7 @@ export function ClubShell({ children }: { children: ReactNode }) {
             }
             return (
               <Link
-                key={item.href}
+                key={item.label}
                 href={item.href}
                 className={`rounded-lg px-3 py-2 text-sm transition ${
                   active

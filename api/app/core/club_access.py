@@ -74,3 +74,24 @@ async def require_gestor_or_entrenador(
             detail="Solo el gestor o un entrenador puede realizar esta acción",
         )
     return membership
+
+
+async def require_live_stats(
+    club_id: uuid.UUID = Path(...),
+    db: AsyncSession = Depends(get_db),
+    usuario: Usuario = Depends(get_current_user),
+) -> ClubUsuario:
+    """Dependencia: exige ser miembro y GESTOR_CLUB, ENTRENADOR o AYUDANTE.
+
+    AYUDANTE solo tiene acceso a Live Stats (no a la gestión general del
+    club), por eso esta dependencia es distinta de require_gestor_or_entrenador.
+    """
+    membership = await get_membership(db, club_id, usuario.id)
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Club no encontrado")
+    if membership.rol not in (RolClub.GESTOR_CLUB, RolClub.ENTRENADOR, RolClub.AYUDANTE):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para la captura en directo",
+        )
+    return membership

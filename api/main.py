@@ -13,6 +13,8 @@ from app.routers import (
     invitaciones,
     competiciones,
     partidos,
+    convocatorias,
+    livematch,
 )
 
 app = FastAPI(title="MyHandStats API", version="0.1.0")
@@ -38,3 +40,5 @@ app.include_router(invitaciones.router)
 app.include_router(invitaciones.redeem_router)
 app.include_router(competiciones.router)
 app.include_router(partidos.router)
+app.include_router(convocatorias.router)
+app.include_router(livematch.router)

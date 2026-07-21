@@ -139,6 +139,29 @@ export const MANO_LABEL: Record<ManoDominante, string> = {
   DESCONOCIDA: "Desconocida",
 };
 
+/* ------------------------------- Plantilla ------------------------------- */
+
+export type Asignacion = {
+  id: string;
+  jugador_id: string;
+  equipo_id: string;
+  temporada_id: string;
+  dorsal: number | null;
+  equipo_principal: boolean;
+  disponible_para_jugar: boolean;
+  tipo_asignacion: string;
+  fecha_inicio: string | null;
+  fecha_fin: string | null;
+  activo: boolean;
+  creado_en: string;
+  actualizado_en: string;
+};
+
+export type PlantillaItem = {
+  asignacion: Asignacion;
+  jugador: Jugador;
+};
+
 /* --------------------------- Cuerpo técnico --------------------------- */
 
 export type ClubMember = {
@@ -406,8 +429,17 @@ export type EventoPartido = {
   goles_equipo: number;
   goles_rival: number;
   tipo: TipoEvento;
+  subtipo: string | null;
+  fase: FaseJuego | null;
+  situacion_numerica: SituacionNumerica | null;
+  sistema_ataque: SistemaAtaque | null;
+  sistema_defensa: SistemaDefensa | null;
   resultado_lanzamiento: ResultadoLanzamiento | null;
   resultado: ResultadoEvento | null;
+  campo_x: number | null;
+  campo_y: number | null;
+  zona_campo: ZonaCampo | null;
+  zona_porteria: ZonaPorteria | null;
 };
 
 export const PERIODO_LABEL: Record<PeriodoPartido, string> = {
@@ -416,4 +448,130 @@ export const PERIODO_LABEL: Record<PeriodoPartido, string> = {
   PRORROGA_1: "Prórroga 1",
   PRORROGA_2: "Prórroga 2",
   PENALTIS: "Penaltis",
+};
+
+/* --------------------------- Livematch (escritura) ------------------------ */
+
+export type FaseJuego =
+  | "CONTRAATAQUE_PRIMERA_OLEADA"
+  | "CONTRAATAQUE_SEGUNDA_OLEADA"
+  | "ATAQUE_POSICIONAL"
+  | "SAQUE_CENTRO_RAPIDO"
+  | "SIETE_METROS"
+  | "GOLPE_FRANCO"
+  | "ATAQUE_PORTERIA_VACIA"
+  | "TRANSICION_DEFENSIVA"
+  | "DEFENSA_POSICIONAL"
+  | "ATAQUE_SUPERIORIDAD"
+  | "ATAQUE_INFERIORIDAD"
+  | "DEFENSA_SUPERIORIDAD"
+  | "DEFENSA_INFERIORIDAD"
+  | "ATAQUE_7_VS_6"
+  | "DEFENSA_7_VS_6"
+  | "OTRA";
+
+export type SituacionNumerica =
+  | "SEIS_VS_SEIS"
+  | "SEIS_VS_CINCO"
+  | "CINCO_VS_SEIS"
+  | "SIETE_VS_SEIS"
+  | "SEIS_VS_SIETE"
+  | "CINCO_VS_CINCO"
+  | "OTRA";
+
+export type SistemaAtaque =
+  | "TRES_TRES"
+  | "DOS_CUATRO"
+  | "SIETE_VS_SEIS"
+  | "PORTERIA_VACIA"
+  | "DESCONOCIDO";
+
+export type SistemaDefensa =
+  | "SEIS_CERO"
+  | "CINCO_UNO"
+  | "TRES_DOS_UNO"
+  | "CUATRO_DOS"
+  | "TRES_TRES"
+  | "MIXTA"
+  | "INDIVIDUAL"
+  | "DESCONOCIDA";
+
+export type ZonaPorteria =
+  | "ALTA_IZQUIERDA"
+  | "ALTA_CENTRO"
+  | "ALTA_DERECHA"
+  | "MEDIA_IZQUIERDA"
+  | "MEDIA_CENTRO"
+  | "MEDIA_DERECHA"
+  | "BAJA_IZQUIERDA"
+  | "BAJA_CENTRO"
+  | "BAJA_DERECHA";
+
+export type ZonaCampo =
+  | "EXTREMO_IZQUIERDO"
+  | "LATERAL_IZQUIERDO_9M"
+  | "CENTRAL_9M"
+  | "LATERAL_DERECHO_9M"
+  | "EXTREMO_DERECHO"
+  | "IZQUIERDA_6M"
+  | "CENTRO_6M"
+  | "DERECHA_6M"
+  | "ZONA_PIVOTE"
+  | "SIETE_METROS"
+  | "CAMPO_PROPIO"
+  | "PORTERIA_VACIA_LARGA_DISTANCIA"
+  | "DESCONOCIDA";
+
+export type EventoCreate = {
+  origen: OrigenEvento;
+  equipo_id?: string | null;
+  jugador_id?: string | null;
+  jugador_asistencia_id?: string | null;
+  portero_id?: string | null;
+  jugador_texto?: string | null;
+  periodo: PeriodoPartido;
+  tiempo_ms: number;
+  tipo: TipoEvento;
+  subtipo?: string | null;
+  fase?: FaseJuego | null;
+  situacion_numerica?: SituacionNumerica | null;
+  sistema_ataque?: SistemaAtaque | null;
+  sistema_defensa?: SistemaDefensa | null;
+  resultado_lanzamiento?: ResultadoLanzamiento | null;
+  resultado?: ResultadoEvento | null;
+  campo_x?: number | null;
+  campo_y?: number | null;
+  zona_campo?: ZonaCampo | null;
+  zona_porteria?: ZonaPorteria | null;
+};
+
+export type EventoLiveResponse = EventoCreate & {
+  id: string;
+  partido_id: string;
+  goles_equipo: number;
+  goles_rival: number;
+  eliminado: boolean;
+};
+
+/* ------------------------------ Convocatoria ------------------------------ */
+
+export type ConvocatoriaItem = {
+  jugador_id: string;
+  nombre: string;
+  apellidos: string;
+  foto_url: string | null;
+  dorsal: number | null;
+  posicion_principal: PosicionJugador | null;
+  disponible: boolean;
+  es_portero: boolean;
+  titular: boolean;
+  disponible_para_jugar: boolean;
+};
+
+export type ConvocatoriaJugadorInput = {
+  jugador_id: string;
+  disponible: boolean;
+  es_portero: boolean;
+  titular: boolean;
+  dorsal: number | null;
 };
